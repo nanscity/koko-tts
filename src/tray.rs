@@ -8,9 +8,9 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DestroyMenu,
-    GetCursorPos, LoadIconW, LoadImageW, RegisterClassW, SetForegroundWindow,
+    GetCursorPos, GetSystemMetrics, LoadIconW, LoadImageW, RegisterClassW, SetForegroundWindow,
     TrackPopupMenu, HICON, IDI_APPLICATION, IMAGE_ICON, LR_DEFAULTSIZE, LR_SHARED,
-    MF_SEPARATOR, MF_STRING, TPM_BOTTOMALIGN, TPM_RIGHTBUTTON,
+    MF_SEPARATOR, MF_STRING, SM_CXSMICON, SM_CYSMICON, TPM_BOTTOMALIGN, TPM_RIGHTBUTTON,
     WM_APP, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 
@@ -71,14 +71,14 @@ impl TrayIcon {
         let len = tip_encoded.len().min(self.nid.szTip.len());
         self.nid.szTip = [0; 128];
         self.nid.szTip[..len].copy_from_slice(&tip_encoded[..len]);
-        self.nid.uFlags = NIF_TIP;
+        self.nid.uFlags = NIF_TIP | NIF_ICON;
         unsafe {
             let _ = Shell_NotifyIconW(NIM_MODIFY, &self.nid);
         }
     }
 
     pub fn show_notification(&mut self, title: &str, msg: &str, is_error: bool) {
-        self.nid.uFlags = NIF_INFO;
+        self.nid.uFlags = NIF_INFO | NIF_ICON;
         self.nid.dwInfoFlags = if is_error { NIIF_ERROR } else { NIIF_INFO };
 
         let title_encoded: Vec<u16> = title.encode_utf16().chain(std::iter::once(0)).collect();
@@ -176,9 +176,27 @@ pub fn show_tray_menu(hwnd: HWND, is_speaking: bool) {
 
 pub fn load_app_icon() -> Result<HICON, String> {
     unsafe {
-        // 1. Try to load custom icon embedded into the PE binary resources (resource ID 1 set by winres)
+        // 1. Try to load custom icon embedded into the PE binary resources (resource ID 1)
         if let Ok(h_module) = GetModuleHandleW(None) {
             let h_instance: HINSTANCE = h_module.into();
+
+            // Query system tray small icon dimensions (16x16 or DPI-scaled 20x20, 24x24, 32x32)
+            let cx = GetSystemMetrics(SM_CXSMICON);
+            let cy = GetSystemMetrics(SM_CYSMICON);
+
+            if let Ok(handle) = LoadImageW(
+                h_instance,
+                PCWSTR(1 as *const u16),
+                IMAGE_ICON,
+                cx,
+                cy,
+                LR_SHARED,
+            ) {
+                if !handle.is_invalid() {
+                    return Ok(HICON(handle.0));
+                }
+            }
+
             if let Ok(handle) = LoadImageW(
                 h_instance,
                 PCWSTR(1 as *const u16),
