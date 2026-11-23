@@ -13,12 +13,18 @@ impl Default for ClipboardMode {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
     pub hotkey: String,
     pub clipboard_mode: ClipboardMode,
     pub dont_restore_clipboard: bool,
     pub start_with_windows: bool,
+    #[serde(default = "default_true")]
+    pub clean_text: bool,
     pub voice: String,
     pub speed: f32,
     pub port: u16,
@@ -35,6 +41,7 @@ impl Default for AppSettings {
             clipboard_mode: ClipboardMode::AutoCopy,
             dont_restore_clipboard: false,
             start_with_windows: false,
+            clean_text: true,
             voice: "af_bella".to_string(),
             speed: 1.0,
             port: 8787,

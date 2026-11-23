@@ -2,6 +2,7 @@
 
 mod audio;
 mod autostart;
+mod clean;
 mod clipboard;
 mod hotkey;
 mod playback;
@@ -111,25 +112,48 @@ fn handle_hotkey_press() {
         return;
     }
 
-    let (mode, dont_restore, voice, speed) = {
+    let (mode, dont_restore, voice, speed, clean) = {
         let guard = SETTINGS_REF.lock();
         if let Some(ref s_arc) = *guard {
             let s = s_arc.lock();
-            (s.clipboard_mode, s.dont_restore_clipboard, s.voice.clone(), s.speed)
+            (
+                s.clipboard_mode,
+                s.dont_restore_clipboard,
+                s.voice.clone(),
+                s.speed,
+                s.clean_text,
+            )
         } else {
-            (settings::ClipboardMode::AutoCopy, false, "af_bella".to_string(), 1.0)
+            (
+                settings::ClipboardMode::AutoCopy,
+                false,
+                "af_bella".to_string(),
+                1.0,
+                true,
+            )
         }
     };
 
     match capture_selected_text(mode, dont_restore) {
         Ok(text) => {
-            let count = text.chars().count();
+            let text_to_play = if clean {
+                clean::clean_text(&text)
+            } else {
+                text
+            };
+
+            if text_to_play.trim().is_empty() {
+                notify("Notice", "No readable text found after cleanup.", false);
+                return;
+            }
+
+            let count = text_to_play.chars().count();
             notify("Reading Aloud", &format!("Reading {} characters with Kokoro...", count), false);
             if let Some(tray) = TRAY_REF.lock().as_mut() {
                 tray.set_tooltip("Kokoro TTS (Speaking...)");
             }
             // Dispatches to coordinator: chunks text, starts synthesis lookahead, streams to audio
-            coord.play_text(&text, &voice, speed);
+            coord.play_text(&text_to_play, &voice, speed);
         }
         Err(err) => {
             notify("Notice", &err, true);

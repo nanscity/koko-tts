@@ -232,6 +232,14 @@
       </div>
 
       <div class="setting-row">
+        <label style="color: var(--text);">
+          <input type="checkbox" id="cleanTextToggle" checked>
+          Clean text before reading (remove URLs, citations [1], markdown formatting)
+        </label>
+        <div class="setting-desc">Converts Markdown links to plain text, removes Wikipedia citations like [1] and [[2]], strips bare URLs and symbols, and improves pronunciation.</div>
+      </div>
+
+      <div class="setting-row">
         <label class="title">Online TTS API Key (Optional)</label>
         <div class="setting-desc">Paste API key here for third-party online TTS providers (OpenAI / ElevenLabs extensible backend).</div>
         <input type="password" id="onlineApiKey" placeholder="sk-..." style="background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem; color: var(--text); font-family: monospace; font-size: 0.85rem; width: 100%; outline: none; margin-top: 0.25rem;">
@@ -268,6 +276,8 @@
             updateState(msg.StateChanged);
           } else if (msg.LineChanged !== undefined) {
             highlightLine(msg.LineChanged);
+          } else if (msg.Notice) {
+            showToast(msg.Notice);
           }
         } catch (e) {
           console.error("WS error parse:", e);
@@ -445,6 +455,7 @@
       }
       document.getElementById("dontRestoreToggle").checked = settings.dont_restore_clipboard;
       document.getElementById("autostartToggle").checked = settings.start_with_windows;
+      document.getElementById("cleanTextToggle").checked = settings.clean_text !== false;
       document.getElementById("onlineApiKey").value = settings.online_api_key || "";
     }
 
@@ -497,6 +508,7 @@
       const clipboard_mode = document.getElementById("modeAutoCopy").checked ? "AutoCopy" : "DirectRead";
       const dont_restore_clipboard = document.getElementById("dontRestoreToggle").checked;
       const start_with_windows = document.getElementById("autostartToggle").checked;
+      const clean_text = document.getElementById("cleanTextToggle").checked;
       const online_api_key = document.getElementById("onlineApiKey").value.trim();
 
       await fetch("/api/settings", {
@@ -507,6 +519,7 @@
           clipboard_mode,
           dont_restore_clipboard,
           start_with_windows,
+          clean_text,
           online_api_key
         })
       });

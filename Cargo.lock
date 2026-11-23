@@ -894,6 +894,7 @@ dependencies = [
  "ndarray",
  "ort",
  "parking_lot",
+ "regex",
  "rodio",
  "serde",
  "serde_json",

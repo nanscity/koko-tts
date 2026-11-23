@@ -28,6 +28,7 @@ pub struct PlaybackState {
 pub enum PlaybackEvent {
     StateChanged(PlaybackState),
     LineChanged(usize),
+    Notice(String),
 }
 
 pub struct PlaybackCoordinator {
@@ -214,6 +215,7 @@ impl PlaybackCoordinator {
         let state_arc = self.state.clone();
         let cache_arc = self.audio_cache.clone();
         let epoch_arc = self.epoch.clone();
+        let event_tx = self.event_tx.clone();
 
         thread::Builder::new()
             .name("koko_synth".to_string())
@@ -255,13 +257,46 @@ impl PlaybackCoordinator {
                     };
 
                     if !is_cached {
-                        let line_text = &lines[idx];
-                        if let Ok(audio) = engine.synthesize(line_text, &voice, speed) {
-                            if epoch_arc.load(Ordering::SeqCst) == epoch {
-                                let mut cache = cache_arc.lock();
-                                if idx < cache.len() {
-                                    cache[idx] = Some(audio);
-                                }
+                        let line_text = lines[idx].clone();
+                        let synth_engine = engine.clone();
+                        let synth_voice = voice.clone();
+
+                        // Wrap synthesis in catch_unwind to guarantee a panic never kills the synthesis thread
+                        let synth_res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+                            synth_engine.synthesize(&line_text, &synth_voice, speed)
+                        }));
+
+                        let audio_samples = match synth_res {
+                            Ok(Ok(samples)) if !samples.is_empty() => samples,
+                            Ok(Ok(_empty)) => {
+                                // Empty audio returned, supply minimal silence (100ms) so playback moves on
+                                vec![0.0f32; 2400]
+                            }
+                            Ok(Err(err)) => {
+                                eprintln!("[Kokoro TTS Error] Chunk {}: {}", idx + 1, err);
+                                let _ = event_tx.send(PlaybackEvent::Notice(format!(
+                                    "Notice: chunk {} failed ({}), skipping",
+                                    idx + 1,
+                                    err
+                                )));
+                                // Insert 100ms silence so playback loop doesn't stall
+                                vec![0.0f32; 2400]
+                            }
+                            Err(panic_payload) => {
+                                eprintln!("[Kokoro TTS Panic] Chunk {}: {:?}", idx + 1, panic_payload);
+                                let _ = event_tx.send(PlaybackEvent::Notice(format!(
+                                    "Notice: chunk {} panic during inference, skipping",
+                                    idx + 1
+                                )));
+                                // Insert 100ms silence so playback doesn't stall
+                                vec![0.0f32; 2400]
+                            }
+                        };
+
+                        if epoch_arc.load(Ordering::SeqCst) == epoch {
+                            let mut cache = cache_arc.lock();
+                            if idx < cache.len() {
+                                cache[idx] = Some(audio_samples);
                             }
                         }
                     }
@@ -375,7 +410,11 @@ pub fn split_into_chunks(text: &str) -> Vec<String> {
                 let end = if i + 1 < len { chars[i + 1].0 } else { p.len() };
                 let sentence = p[start..end].trim();
                 if !sentence.is_empty() {
-                    chunks.push(sentence.to_string());
+                    for piece in split_long_sentence(sentence, 200) {
+                        if !piece.is_empty() {
+                            chunks.push(piece);
+                        }
+                    }
                 }
                 start = end;
             }
@@ -384,7 +423,11 @@ pub fn split_into_chunks(text: &str) -> Vec<String> {
         if start < p.len() {
             let remainder = p[start..].trim();
             if !remainder.is_empty() {
-                chunks.push(remainder.to_string());
+                for piece in split_long_sentence(remainder, 200) {
+                    if !piece.is_empty() {
+                        chunks.push(piece);
+                    }
+                }
             }
         }
     }
@@ -404,4 +447,43 @@ pub fn split_into_chunks(text: &str) -> Vec<String> {
     }
 
     chunks
+}
+
+/// Splits long sentences into natural clauses (< max_len characters, well within Kokoro token limits)
+/// using clause markers (;, :, ,, —, -) or whitespace word boundaries.
+fn split_long_sentence(sentence: &str, max_len: usize) -> Vec<String> {
+    if sentence.len() <= max_len {
+        return vec![sentence.to_string()];
+    }
+
+    let mut result = Vec::new();
+    let mut current = sentence;
+
+    while current.len() > max_len {
+        let slice = &current[..max_len];
+        let split_pos = slice
+            .rfind(|c| c == ';' || c == ':' || c == ',' || c == '—' || c == '-')
+            .filter(|&pos| pos > 25)
+            .or_else(|| slice.rfind(char::is_whitespace).filter(|&pos| pos > 25));
+
+        if let Some(pos) = split_pos {
+            let part = current[..=pos].trim();
+            if !part.is_empty() {
+                result.push(part.to_string());
+            }
+            current = current[pos + 1..].trim();
+        } else {
+            let part = current[..max_len].trim();
+            if !part.is_empty() {
+                result.push(part.to_string());
+            }
+            current = current[max_len..].trim();
+        }
+    }
+
+    if !current.is_empty() {
+        result.push(current.to_string());
+    }
+
+    result
 }

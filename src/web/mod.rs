@@ -33,6 +33,7 @@ pub struct SettingsUpdateRequest {
     pub clipboard_mode: Option<ClipboardMode>,
     pub dont_restore_clipboard: Option<bool>,
     pub start_with_windows: Option<bool>,
+    pub clean_text: Option<bool>,
     pub voice: Option<String>,
     pub speed: Option<f32>,
     pub online_api_key: Option<String>,
@@ -122,10 +123,26 @@ async fn handle_socket(mut socket: WebSocket, state: WebState) {
 async fn play_handler(State(state): State<WebState>, Json(payload): Json<PlayRequest>) -> Json<serde_json::Value> {
     let coord = state.coordinator.lock().clone();
     if let Some(coord) = coord {
-        let voice = payload.voice.unwrap_or_else(|| state.settings.lock().voice.clone());
-        let speed = payload.speed.unwrap_or_else(|| state.settings.lock().speed);
+        let (voice, speed, clean) = {
+            let s = state.settings.lock();
+            (
+                payload.voice.unwrap_or_else(|| s.voice.clone()),
+                payload.speed.unwrap_or_else(|| s.speed),
+                s.clean_text,
+            )
+        };
 
-        coord.play_text(&payload.text, &voice, speed);
+        let text_to_play = if clean {
+            crate::clean::clean_text(&payload.text)
+        } else {
+            payload.text
+        };
+
+        if text_to_play.trim().is_empty() {
+            return Json(serde_json::json!({ "success": false, "error": "No readable text after cleanup." }));
+        }
+
+        coord.play_text(&text_to_play, &voice, speed);
         Json(serde_json::json!({ "success": true }))
     } else {
         Json(serde_json::json!({ "success": false, "error": "Model engine is still initializing..." }))
@@ -217,6 +234,9 @@ async fn update_settings(
     if let Some(autostart) = req.start_with_windows {
         s.start_with_windows = autostart;
         let _ = set_autostart(autostart);
+    }
+    if let Some(clean) = req.clean_text {
+        s.clean_text = clean;
     }
     if let Some(voice) = req.voice {
         s.voice = voice;
