@@ -22,6 +22,8 @@ use tray::{
     ID_PAUSE_RESUME, ID_QUIT, ID_STOP, WM_TRAYICON,
 };
 use tts::kokoro::KokoroEngine;
+use tts::supertonic::SupertonicEngine;
+use tts::CompositeEngine;
 use web::{start_web_server, WebState};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -97,7 +99,7 @@ fn handle_hotkey_press() {
     let coord = match coord {
         Some(c) => c,
         None => {
-            notify("Model Loading", "Kokoro TTS is still initializing or downloading model.", true);
+            notify("Model Loading", "TTS engines are still initializing or downloading models.", true);
             return;
         }
     };
@@ -107,7 +109,7 @@ fn handle_hotkey_press() {
         // Pressing hotkey while speaking stops playback
         coord.stop();
         if let Some(tray) = TRAY_REF.lock().as_mut() {
-            tray.set_tooltip("Kokoro TTS (Idle)");
+            tray.set_tooltip("TTS Reader (Idle)");
         }
         return;
     }
@@ -148,9 +150,9 @@ fn handle_hotkey_press() {
             }
 
             let count = text_to_play.chars().count();
-            notify("Reading Aloud", &format!("Reading {} characters with Kokoro...", count), false);
+            notify("Reading Aloud", &format!("Reading {} characters...", count), false);
             if let Some(tray) = TRAY_REF.lock().as_mut() {
-                tray.set_tooltip("Kokoro TTS (Speaking...)");
+                tray.set_tooltip("TTS Reader (Speaking...)");
             }
             // Dispatches to coordinator: chunks text, starts synthesis lookahead, streams to audio
             coord.play_text(&text_to_play, &voice, speed);
@@ -168,12 +170,12 @@ fn toggle_pause_resume() {
         if state.status == PlayStatus::Playing {
             coord.pause();
             if let Some(tray) = TRAY_REF.lock().as_mut() {
-                tray.set_tooltip("Kokoro TTS (Paused)");
+                tray.set_tooltip("TTS Reader (Paused)");
             }
         } else if state.status == PlayStatus::Paused {
             coord.resume();
             if let Some(tray) = TRAY_REF.lock().as_mut() {
-                tray.set_tooltip("Kokoro TTS (Speaking...)");
+                tray.set_tooltip("TTS Reader (Speaking...)");
             }
         }
     }
@@ -184,7 +186,7 @@ fn stop_playback() {
     if let Some(ref coord) = *guard {
         coord.stop();
         if let Some(tray) = TRAY_REF.lock().as_mut() {
-            tray.set_tooltip("Kokoro TTS (Idle)");
+            tray.set_tooltip("TTS Reader (Idle)");
             tray.show_notification("Playback Stopped", "Speech playback has been stopped.", false);
         }
     }
@@ -235,7 +237,7 @@ fn main() {
     };
 
     // 4. Create System Tray Icon
-    let mut tray_opt = match TrayIcon::new(hwnd, "Kokoro TTS (Initializing...)") {
+    let mut tray_opt = match TrayIcon::new(hwnd, "TTS Reader (Initializing...)") {
         Ok(t) => Some(t),
         Err(e) => {
             eprintln!("Warning: could not create tray icon: {}", e);
@@ -251,7 +253,7 @@ fn main() {
         }
     } else {
         if let Some(ref mut tray) = tray_opt {
-            tray.set_tooltip(&format!("Kokoro TTS (Hotkey: {})", hotkey_str));
+            tray.set_tooltip(&format!("TTS Reader (Hotkey: {})", hotkey_str));
         }
     }
     *HOTKEY_MGR_REF.lock() = Some(hotkey_mgr);
@@ -298,25 +300,38 @@ fn main() {
 
     // 7. Spawn Background Model Loading & Coordinator Setup Thread
     thread::spawn(move || {
-        // Download models if not already present
-        let model_dir = match KokoroEngine::download_models_if_needed(|p, msg| {
+        // Download Kokoro models if not already present
+        let kokoro_dir = match KokoroEngine::download_models_if_needed(|p, msg| {
             if let Some(t) = TRAY_REF.lock().as_mut() {
                 t.set_tooltip(&format!("Kokoro TTS ({:.0}%): {}", p * 100.0, msg));
             }
         }) {
             Ok(dir) => dir,
             Err(e) => {
-                notify("Model Download Error", &e, true);
+                notify("Kokoro Download Error", &e, true);
+                return;
+            }
+        };
+
+        // Download Supertonic 3 models if not already present
+        let supertonic_dir = match SupertonicEngine::download_models_if_needed(|p, msg| {
+            if let Some(t) = TRAY_REF.lock().as_mut() {
+                t.set_tooltip(&format!("Supertonic ({:.0}%): {}", p * 100.0, msg));
+            }
+        }) {
+            Ok(dir) => dir,
+            Err(e) => {
+                notify("Supertonic Download Error", &e, true);
                 return;
             }
         };
 
         if let Some(t) = TRAY_REF.lock().as_mut() {
-            t.set_tooltip("Kokoro TTS: Loading engine into memory...");
+            t.set_tooltip("Kokoro & Supertonic: Loading engines into memory...");
         }
 
-        // Initialize Kokoro Engine (limits threads to 4, warms up, below-normal priority)
-        let engine = match KokoroEngine::new(&model_dir) {
+        // Initialize Kokoro Engine
+        let kokoro_engine = match KokoroEngine::new(&kokoro_dir) {
             Ok(eng) => Arc::new(eng),
             Err(e) => {
                 notify("Engine Error", &format!("Failed to load Kokoro ONNX model: {}", e), true);
@@ -324,8 +339,20 @@ fn main() {
             }
         };
 
+        // Initialize Supertonic 3 Engine
+        let supertonic_engine = match SupertonicEngine::new(&supertonic_dir) {
+            Ok(eng) => Arc::new(eng),
+            Err(e) => {
+                notify("Engine Error", &format!("Failed to load Supertonic ONNX models: {}", e), true);
+                return;
+            }
+        };
+
+        // Initialize Composite Dispatcher Engine
+        let composite_engine = Arc::new(CompositeEngine::new(kokoro_engine, supertonic_engine));
+
         // Initialize Playback Coordinator
-        let coordinator = match PlaybackCoordinator::new(engine) {
+        let coordinator = match PlaybackCoordinator::new(composite_engine) {
             Ok(c) => c,
             Err(e) => {
                 notify("Audio Error", &format!("Failed to initialize audio output: {}", e), true);
@@ -337,10 +364,10 @@ fn main() {
         *web_coord_clone.lock() = Some(coordinator);
 
         if let Some(t) = TRAY_REF.lock().as_mut() {
-            t.set_tooltip("Kokoro TTS (Ready)");
+            t.set_tooltip("Kokoro & Supertonic TTS (Ready)");
             t.show_notification(
-                "Kokoro TTS Ready",
-                &format!("Engine loaded. Press {} to read selected text.", hotkey_str),
+                "TTS Engines Ready",
+                &format!("Kokoro & Supertonic loaded. Press {} to read selected text.", hotkey_str),
                 false,
             );
         }

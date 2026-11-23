@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use windows::Win32::System::Threading::{GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL};
 
 #[allow(dead_code)]
@@ -31,12 +31,7 @@ impl KokoroEngine {
             return Err(format!("Model file not found at: {}", onnx_path.display()));
         }
 
-        let env = Arc::new(
-            ort::init()
-                .with_name("KokoroTTS")
-                .build()
-                .map_err(|e| format!("ORT init error: {}", e))?,
-        );
+        let env = super::get_or_init_ort_env()?;
 
         let session = Session::builder(&env)
             .map_err(|e| format!("ORT session builder error: {}", e))?
@@ -240,10 +235,10 @@ impl KokoroEngine {
 }
 
 impl TtsEngine for KokoroEngine {
-    fn synthesize(&self, text: &str, voice: &str, speed: f32) -> Result<Vec<f32>, String> {
+    fn synthesize(&self, text: &str, voice: &str, speed: f32) -> Result<(Vec<f32>, u32), String> {
         let trimmed = text.trim();
         if trimmed.is_empty() {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), SAMPLE_RATE));
         }
 
         // 1. Text to phonemes
@@ -276,7 +271,7 @@ impl TtsEngine for KokoroEngine {
         let token_len = tokens.len();
         if token_len < 3 {
             // Nothing to speak
-            return Ok(Vec::new());
+            return Ok((Vec::new(), SAMPLE_RATE));
         }
 
         // 3. Voice embedding style tensor
@@ -319,7 +314,7 @@ impl TtsEngine for KokoroEngine {
         let silence_samples = (SAMPLE_RATE as f32 * 0.075) as usize;
         audio.resize(audio.len() + silence_samples, 0.0f32);
 
-        Ok(audio)
+        Ok((audio, SAMPLE_RATE))
     }
 
     fn available_voices(&self) -> Vec<String> {

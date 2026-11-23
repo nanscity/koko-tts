@@ -6,10 +6,11 @@ use std::sync::Arc;
 use std::thread::{self, sleep};
 use std::time::Duration;
 
+#[allow(dead_code)]
 pub const KOKORO_SAMPLE_RATE: u32 = 24000;
 
 pub enum AudioCommand {
-    Play(Vec<f32>),
+    Play(Vec<f32>, u32),
     Pause,
     Resume,
     Stop,
@@ -64,9 +65,9 @@ impl AudioHandle {
                     // Process all pending commands
                     while let Ok(cmd) = cmd_rx.try_recv() {
                         match cmd {
-                            AudioCommand::Play(samples) => {
+                            AudioCommand::Play(samples, sample_rate) => {
                                 if !samples.is_empty() {
-                                    let buffer = SamplesBuffer::new(1, KOKORO_SAMPLE_RATE, samples);
+                                    let buffer = SamplesBuffer::new(1, sample_rate, samples);
                                     sink.append(buffer);
                                     sink.play();
                                     is_paused_thread.store(false, Ordering::SeqCst);
@@ -111,8 +112,8 @@ impl AudioHandle {
         })
     }
 
-    pub fn play(&self, samples: Vec<f32>) {
-        let _ = self.cmd_tx.send(AudioCommand::Play(samples));
+    pub fn play(&self, samples: Vec<f32>, sample_rate: u32) {
+        let _ = self.cmd_tx.send(AudioCommand::Play(samples, sample_rate));
     }
 
     pub fn pause(&self) {

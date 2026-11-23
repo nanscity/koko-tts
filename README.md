@@ -1,6 +1,6 @@
-# Kokoro TTS - Lightweight Windows System Tray Text-to-Speech
+# koko-tts - High-Performance Windows System Tray Text-to-Speech
 
-A high-performance, low-latency Windows 10/11 system tray application for local text-to-speech, built in pure Rust. Optimized specifically for CPU-only execution (e.g. Intel Core i5 10th gen, 16 GB RAM), it provides instant text-to-speech for any selected text across Windows via global hotkeys, paired with an embedded real-time Web UI.
+A high-performance, low-latency Windows 10/11 system tray application for local text-to-speech, built in pure Rust. Powered by dual neural speech engines (**Kokoro-82M** and **Supertonic-3**), it provides instant, natural text-to-speech for any selected text across Windows via global hotkeys, paired with an embedded real-time Web UI. Optimized specifically for CPU-only execution with INT8 and flow-matching ONNX models.
 
 ---
 
@@ -22,12 +22,19 @@ A high-performance, low-latency Windows 10/11 system tray application for local 
 - **Direct Clipboard Mode**: Option to read existing clipboard text without simulating keyboard copy.
 - **Toggle-to-Stop**: Pressing the hotkey while audio is playing immediately halts playback.
 
-### 3. Kokoro-82M INT8 ONNX Speech Engine
-- **Local Inference via ONNX Runtime (`ort`)**: No PyTorch or libtorch runtime overhead; executes on CPU with INT8 quantization (~92 MB model).
-- **Smooth System Performance**: Inference is strictly limited to 4 intra-threads, and worker threads run at `THREAD_PRIORITY_BELOW_NORMAL` to ensure other applications and games never experience stutter.
-- **Pure Rust Phonemization (`misaki-rs`)**: Converts English text directly to IPA phonemes with zero native C phonemizer dependencies.
-- **Automatic Model Provisioning**: On first launch, required models and voice embeddings (`af_bella`, `af_sarah`, `am_adam`, `bf_emma`, `bm_george`) are automatically downloaded to `%APPDATA%\KokoroTTS\models` with real-time progress indicators.
-- **Extensible `TtsEngine` Trait**: Clean abstraction layer (`synthesize(text, voice, speed) -> PCM samples`) allowing online TTS engines (e.g., OpenAI / ElevenLabs) to be added effortlessly.
+### 3. Dual Neural Speech Engines (Kokoro-82M & Supertonic-3)
+- **Kokoro-82M INT8 ONNX Engine**:
+  - Local inference via ONNX Runtime (`ort`) with INT8 quantization (~92 MB model).
+  - Phonemization via `misaki-rs` with IPA affricate normalization (`ʤ`, `ʧ`).
+  - Supports Kokoro voice embeddings (`af_bella`, `af_sarah`, `af_nicole`, `af_sky`, `am_adam`, `am_michael`, `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`).
+- **Supertonic-3 Flow-Matching ONNX Engine**:
+  - Ultra-fast, lightweight on-device multi-stage pipeline: Duration Predictor, Text Encoder, Flow-Matching Vector Estimator, and Vocoder.
+  - Native 44.1 kHz high-fidelity PCM audio with character-level unicode indexing (no external G2P dependencies).
+  - Supports 10 expressive speaker styles (`F1`–`F5` female, `M1`–`M5` male) with categorized dropdown selection in the Web UI.
+- **Smooth System Performance**:
+  - Strictly limited to 4 intra-threads on CPU.
+  - Synthesis worker runs at `THREAD_PRIORITY_BELOW_NORMAL` so background games and apps never experience stutter.
+- **Automatic Model Provisioning**: On first launch, required models and voice files are automatically downloaded to `%APPDATA%\KokoroTTS\` with progress indicators.
 
 ### 4. Low-Latency Lookahead Streaming Playback
 - **Sub-100ms Initial Audio Start**: Splits text into sentence chunks, keeping the first chunk under 100 characters for instantaneous speech onset.

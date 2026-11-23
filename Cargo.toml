@@ -30,6 +30,8 @@ parking_lot = "0.12"
 axum = { version = "0.7", features = ["ws"] }
 futures-util = "0.3"
 regex = "1.10"
+rand = "0.8"
+unicode-normalization = "0.1"
 
 [profile.release]
 opt-level = 3

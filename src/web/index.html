@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kokoro TTS — Editorial Reader</title>
+  <title>koko-tts — Editorial Reader</title>
   <link rel="icon" type="image/png" href="/icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <style>
@@ -843,9 +843,9 @@
       </div>
       <div class="brand-title-wrap">
         <div class="brand-headline">
-          KOKORO <span class="light-tag">TTS</span>
+          KOKO<span class="light-tag">-TTS</span>
         </div>
-        <div class="brand-meta">NEURAL SPEECH ENGINE 82M &bull; CPU INT8</div>
+        <div class="brand-meta">NEURAL SPEECH ENGINES &bull; KOKORO-82M &amp; SUPERTONIC-3 (CPU INT8 / ONNX)</div>
       </div>
     </div>
     <div class="header-actions">
@@ -886,16 +886,30 @@
           <label class="control-label">
             Voice
             <select id="voiceSelect" onchange="onVoiceChange()">
-              <option value="af_bella">af_bella (Female - American Bella)</option>
-              <option value="af_sarah">af_sarah (Female - American Sarah)</option>
-              <option value="af_nicole">af_nicole (Female - American Nicole)</option>
-              <option value="af_sky">af_sky (Female - American Sky)</option>
-              <option value="am_adam">am_adam (Male - American Adam)</option>
-              <option value="am_michael">am_michael (Male - American Michael)</option>
-              <option value="bf_emma">bf_emma (Female - British Emma)</option>
-              <option value="bf_isabella">bf_isabella (Female - British Isabella)</option>
-              <option value="bm_george">bm_george (Male - British George)</option>
-              <option value="bm_lewis">bm_lewis (Male - British Lewis)</option>
+              <optgroup label="Kokoro Voices">
+                <option value="af_bella">af_bella (Female - American Bella)</option>
+                <option value="af_sarah">af_sarah (Female - American Sarah)</option>
+                <option value="af_nicole">af_nicole (Female - American Nicole)</option>
+                <option value="af_sky">af_sky (Female - American Sky)</option>
+                <option value="am_adam">am_adam (Male - American Adam)</option>
+                <option value="am_michael">am_michael (Male - American Michael)</option>
+                <option value="bf_emma">bf_emma (Female - British Emma)</option>
+                <option value="bf_isabella">bf_isabella (Female - British Isabella)</option>
+                <option value="bm_george">bm_george (Male - British George)</option>
+                <option value="bm_lewis">bm_lewis (Male - British Lewis)</option>
+              </optgroup>
+              <optgroup label="Supertonic Voices">
+                <option value="st_f1">F1 (Female - Natural 1)</option>
+                <option value="st_f2">F2 (Female - Expressive 2)</option>
+                <option value="st_f3">F3 (Female - Warm 3)</option>
+                <option value="st_f4">F4 (Female - Clear 4)</option>
+                <option value="st_f5">F5 (Female - Dynamic 5)</option>
+                <option value="st_m1">M1 (Male - Natural 1)</option>
+                <option value="st_m2">M2 (Male - Deep 2)</option>
+                <option value="st_m3">M3 (Male - Warm 3)</option>
+                <option value="st_m4">M4 (Male - Crisp 4)</option>
+                <option value="st_m5">M5 (Male - Dynamic 5)</option>
+              </optgroup>
             </select>
           </label>
 

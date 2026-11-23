@@ -283,6 +283,16 @@ async fn get_voices(State(state): State<WebState>) -> Json<Vec<String>> {
             "bf_isabella".to_string(),
             "bm_george".to_string(),
             "bm_lewis".to_string(),
+            "st_f1".to_string(),
+            "st_f2".to_string(),
+            "st_f3".to_string(),
+            "st_f4".to_string(),
+            "st_f5".to_string(),
+            "st_m1".to_string(),
+            "st_m2".to_string(),
+            "st_m3".to_string(),
+            "st_m4".to_string(),
+            "st_m5".to_string(),
         ]
     };
     Json(voices)

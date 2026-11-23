@@ -894,11 +894,13 @@ dependencies = [
  "ndarray",
  "ort",
  "parking_lot",
+ "rand",
  "regex",
  "rodio",
  "serde",
  "serde_json",
  "tokio",
+ "unicode-normalization",
  "ureq",
  "windows 0.58.0",
 ]

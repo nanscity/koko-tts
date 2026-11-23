@@ -34,7 +34,7 @@ pub enum PlaybackEvent {
 pub struct PlaybackCoordinator {
     engine: Arc<dyn TtsEngine>,
     state: Arc<parking_lot::Mutex<PlaybackState>>,
-    audio_cache: Arc<parking_lot::Mutex<Vec<Option<Vec<f32>>>>>,
+    audio_cache: Arc<parking_lot::Mutex<Vec<Option<(Vec<f32>, u32)>>>>,
     playing_chunk: Arc<parking_lot::Mutex<Option<usize>>>,
     epoch: Arc<AtomicU64>,
     event_tx: broadcast::Sender<PlaybackEvent>,
@@ -266,37 +266,38 @@ impl PlaybackCoordinator {
                             synth_engine.synthesize(&line_text, &synth_voice, speed)
                         }));
 
-                        let audio_samples = match synth_res {
-                            Ok(Ok(samples)) if !samples.is_empty() => samples,
-                            Ok(Ok(_empty)) => {
+                        let audio_result = match synth_res {
+                            Ok(Ok((samples, sample_rate))) if !samples.is_empty() => (samples, sample_rate),
+                            Ok(Ok((_empty, sample_rate))) => {
                                 // Empty audio returned, supply minimal silence (100ms) so playback moves on
-                                vec![0.0f32; 2400]
+                                let sil_len = (sample_rate as f32 * 0.1) as usize;
+                                (vec![0.0f32; sil_len], sample_rate)
                             }
                             Ok(Err(err)) => {
-                                eprintln!("[Kokoro TTS Error] Chunk {}: {}", idx + 1, err);
+                                eprintln!("[TTS Error] Chunk {}: {}", idx + 1, err);
                                 let _ = event_tx.send(PlaybackEvent::Notice(format!(
                                     "Notice: chunk {} failed ({}), skipping",
                                     idx + 1,
                                     err
                                 )));
                                 // Insert 100ms silence so playback loop doesn't stall
-                                vec![0.0f32; 2400]
+                                (vec![0.0f32; 2400], 24000)
                             }
                             Err(panic_payload) => {
-                                eprintln!("[Kokoro TTS Panic] Chunk {}: {:?}", idx + 1, panic_payload);
+                                eprintln!("[TTS Panic] Chunk {}: {:?}", idx + 1, panic_payload);
                                 let _ = event_tx.send(PlaybackEvent::Notice(format!(
                                     "Notice: chunk {} panic during inference, skipping",
                                     idx + 1
                                 )));
                                 // Insert 100ms silence so playback doesn't stall
-                                vec![0.0f32; 2400]
+                                (vec![0.0f32; 2400], 24000)
                             }
                         };
 
                         if epoch_arc.load(Ordering::SeqCst) == epoch {
                             let mut cache = cache_arc.lock();
                             if idx < cache.len() {
-                                cache[idx] = Some(audio_samples);
+                                cache[idx] = Some(audio_result);
                             }
                         }
                     }
@@ -331,11 +332,11 @@ impl PlaybackCoordinator {
                 cache.get(current_idx).and_then(|opt| opt.clone())
             };
 
-            if let Some(audio) = maybe_audio {
+            if let Some((audio, sample_rate)) = maybe_audio {
                 if !audio.is_empty() {
                     *playing_guard = Some(current_idx);
                     drop(playing_guard);
-                    self.audio.play(audio);
+                    self.audio.play(audio, sample_rate);
                 } else {
                     // Empty chunk, advance immediately
                     drop(playing_guard);
