@@ -3,6 +3,7 @@ use crate::playback::{PlaybackCoordinator, PlaybackEvent};
 use crate::settings::{AppSettings, ClipboardMode};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, State};
+use axum::http::header;
 use axum::response::{Html, IntoResponse, Json};
 use axum::routing::{get, post};
 use axum::Router;
@@ -12,6 +13,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 const INDEX_HTML: &str = include_str!("index.html");
+const ICON_PNG: &[u8] = include_bytes!("../../assets/icon.png");
+const ICON_ICO: &[u8] = include_bytes!("../../assets/icon.ico");
 
 #[derive(Clone)]
 pub struct WebState {
@@ -43,6 +46,8 @@ pub struct SettingsUpdateRequest {
 pub async fn start_web_server(state: WebState, port: u16) -> Result<(), String> {
     let app = Router::new()
         .route("/", get(index_handler))
+        .route("/icon.png", get(icon_png_handler))
+        .route("/favicon.ico", get(favicon_handler))
         .route("/ws", get(ws_handler))
         .route("/api/play", post(play_handler))
         .route("/api/pause", post(pause_handler))
@@ -69,6 +74,14 @@ pub async fn start_web_server(state: WebState, port: u16) -> Result<(), String> 
 
 async fn index_handler() -> Html<&'static str> {
     Html(INDEX_HTML)
+}
+
+async fn icon_png_handler() -> impl IntoResponse {
+    ([(header::CONTENT_TYPE, "image/png")], ICON_PNG)
+}
+
+async fn favicon_handler() -> impl IntoResponse {
+    ([(header::CONTENT_TYPE, "image/x-icon")], ICON_ICO)
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<WebState>) -> impl IntoResponse {

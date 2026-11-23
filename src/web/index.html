@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Kokoro TTS - System Tray Reader</title>
+  <link rel="icon" type="image/png" href="/icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
   <style>
     :root {
       --bg: #0f1117;
@@ -34,7 +36,7 @@
       z-index: 50;
     }
     .logo-container { display: flex; align-items: center; gap: 0.75rem; }
-    .logo-icon { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #a855f7); display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    .logo-img { width: 36px; height: 36px; border-radius: 50%; box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35); object-fit: cover; }
     .badge { font-size: 0.75rem; padding: 0.25rem 0.6rem; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
     .badge.paused { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
     .badge.stopped { background: rgba(156, 163, 175, 0.15); color: #9ca3af; border-color: rgba(156, 163, 175, 0.3); }
@@ -117,7 +119,7 @@
 <body>
   <header>
     <div class="logo-container">
-      <div class="logo-icon">K</div>
+      <img src="/icon.png" alt="Kokoro TTS" class="logo-img">
       <div>
         <div style="font-weight: 600; font-size: 1rem;">Kokoro TTS</div>
         <div style="font-size: 0.75rem; color: var(--text-muted);">82M CPU-Only INT8 Engine</div>

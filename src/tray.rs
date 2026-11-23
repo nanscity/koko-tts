@@ -8,8 +8,9 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, CreateWindowExW, DestroyMenu,
-    GetCursorPos, LoadIconW, RegisterClassW, SetForegroundWindow,
-    TrackPopupMenu, IDI_APPLICATION, MF_SEPARATOR, MF_STRING, TPM_BOTTOMALIGN, TPM_RIGHTBUTTON,
+    GetCursorPos, LoadIconW, LoadImageW, RegisterClassW, SetForegroundWindow,
+    TrackPopupMenu, HICON, IDI_APPLICATION, IMAGE_ICON, LR_DEFAULTSIZE, LR_SHARED,
+    MF_SEPARATOR, MF_STRING, TPM_BOTTOMALIGN, TPM_RIGHTBUTTON,
     WM_APP, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 
@@ -38,7 +39,7 @@ impl TrayIcon {
         nid.uCallbackMessage = WM_TRAYICON;
 
         unsafe {
-            let hicon = LoadIconW(None, IDI_APPLICATION).map_err(|e| e.to_string())?;
+            let hicon = load_app_icon()?;
             nid.hIcon = hicon;
 
             let tip_encoded: Vec<u16> = tooltip.encode_utf16().chain(std::iter::once(0)).collect();
@@ -119,9 +120,12 @@ pub fn create_hidden_window(wndproc: unsafe extern "system" fn(HWND, u32, WPARAM
         let h_instance: HINSTANCE = GetModuleHandleW(None).map_err(|e| e.to_string())?.into();
         let class_name = w!("KokoroTtsMsgWndClass");
 
+        let hicon = load_app_icon().unwrap_or_default();
+
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
             hInstance: h_instance,
+            hIcon: hicon,
             lpszClassName: class_name,
             ..Default::default()
         };
@@ -167,5 +171,35 @@ pub fn show_tray_menu(hwnd: HWND, is_speaking: bool) {
         let _ = SetForegroundWindow(hwnd);
         let _ = TrackPopupMenu(hmenu, TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, pt.x, pt.y, 0, hwnd, None);
         let _ = DestroyMenu(hmenu);
+    }
+}
+
+pub fn load_app_icon() -> Result<HICON, String> {
+    unsafe {
+        // 1. Try to load custom icon embedded into the PE binary resources (resource ID 1 set by winres)
+        if let Ok(h_module) = GetModuleHandleW(None) {
+            let h_instance: HINSTANCE = h_module.into();
+            if let Ok(handle) = LoadImageW(
+                h_instance,
+                PCWSTR(1 as *const u16),
+                IMAGE_ICON,
+                0,
+                0,
+                LR_DEFAULTSIZE | LR_SHARED,
+            ) {
+                if !handle.is_invalid() {
+                    return Ok(HICON(handle.0));
+                }
+            }
+
+            if let Ok(hicon) = LoadIconW(h_instance, PCWSTR(1 as *const u16)) {
+                if !hicon.is_invalid() {
+                    return Ok(hicon);
+                }
+            }
+        }
+
+        // 2. Fallback to default application icon
+        LoadIconW(None, IDI_APPLICATION).map_err(|e| e.to_string())
     }
 }
